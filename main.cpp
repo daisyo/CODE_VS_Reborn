@@ -12,6 +12,58 @@ template<class T> void vin(vector<T>& v, int n) {
     }
 }
 
+#define LIMIT_SEC 180;
+
+// SEC
+class Timer {
+    chrono::high_resolution_clock::time_point start;
+    double limit;
+public:
+    Timer() {
+        start = chrono::high_resolution_clock::now();
+        limit = LIMIT_SEC;
+    }
+    Timer(double limit) :limit(limit) {
+        start = chrono::high_resolution_clock::now();
+    }
+    double get_time() {
+        return chrono::duration<double>(chrono::high_resolution_clock::now() - start).count();
+    }
+    bool time_over() {
+        if (get_time() > limit) {
+            return true;
+        }
+        return false;
+    }
+    void set_start() {
+        start = chrono::high_resolution_clock::now();
+    }
+    double get_limit() const {
+        return limit;
+    }
+};
+
+
+class XorShift {
+public:
+    unsigned long x, y, z, w;
+    XorShift() {
+        x = 123456789; y = 362436069; z = 521288629; w = 88675123;
+    }
+    XorShift(unsigned long seed) {
+        XorShift();
+        w = seed;
+        for (int i = 0; i < 100; ++i) (*this)();
+    }
+    unsigned long operator()() {
+        unsigned long t = x ^ (x << 11);
+        x = y; y = z; z = w;
+        return w = (w ^ (w >> 19)) ^ (t ^ (t >> 8));
+    }
+};
+
+XorShift rnd;
+
 // parameter
 const string myname = "daisyo"; // 名前
 
@@ -83,14 +135,13 @@ struct State
     char field[FIELD_LENGTH * FIELD_WIDTH];
     shared_ptr<State> parent;
 
-    State() : depth(-1), score(0) {}
-    // State(shared_ptr<State> prev)
-    // {
-    //     parent = prev;
-    //     depth = perv->depth + 1;
-    //     score = prev->score;
-    //     for (char i=0; i<FIELD_LENGTH*FIELD_WIDTH; ++i) field[i] = prev->field[i];
-    // }
+    State() : depth(0), score(0) {}
+    State(shared_ptr<State> p) {
+        depth = p->depth + 1;
+        score = p->score;
+        for (int r = 0; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c) field[idx(r, c)] = p->field[idx(r, c)];
+        parent = p;
+    }
 };
 
 
@@ -161,12 +212,6 @@ inline bool vanish(State& s, int h=FIELD_LENGTH, int w=FIELD_WIDTH)
     return update;
 }
 
-// 今の状態から次のターンの状態を返す
-// State simulator(Staet& now, Pack& p, int& r) {
-//
-//
-//
-// }
 
 class Solver
 {
@@ -215,6 +260,11 @@ void Solver::run()
 // メインロジック
 void Solver::think()
 {
+
+    // 最初の状態をコピー
+    State firstState;
+    for (int r = 0; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c) firstState.field[idx(r, c)] = players[0].field[idx(r, c)];
+
 
     cout << "2 0" << endl;
 }
