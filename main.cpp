@@ -20,6 +20,12 @@ const int PACK_SIZE = 2;
 const int FIELD_LENGTH = 16;
 const int FIELD_WIDTH = 10;
 
+const int EMPTY = 0;
+const int OJAMA = 11;
+const char blocks[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'X', 'B' };
+
+inline int idx(int r, int c) { return r * FIELD_WIDTH + c; }
+
 // パック
 struct Pack
 {
@@ -59,6 +65,52 @@ struct Player
 
 Pack packs[MAX_TURN];
 Player players[2];
+
+struct State
+{
+    char depth;
+    int score;
+    char field[FIELD_LENGTH * FIELD_WIDTH];
+    shared_ptr<State> parent;
+
+    State() : depth(-1), score(0) {}
+    // State(shared_ptr<State> prev)
+    // {
+    //     parent = prev;
+    //     depth = perv->depth + 1;
+    //     score = prev->score;
+    //     for (char i=0; i<FIELD_LENGTH*FIELD_WIDTH; ++i) field[i] = prev->field[i];
+    // }
+};
+
+
+// 落とす処理
+inline void fall(State& s, int h=FIELD_LENGTH, int w=FIELD_WIDTH)
+{
+    for (int c = 0; c < w; ++c)
+    {
+        for (int r = h-2; r >= 0; --r)
+        {
+            // 今見ている場所にブロックがあって，その下にブロックがない場合
+            // そのブロックを一番下に移動
+            if (s.field[idx(r, c)] != blocks[EMPTY] and s.field[idx(r+1, c)] == blocks[EMPTY])
+            {
+                char tmp = s.field[idx(r, c)];
+                s.field[idx(r, c)] = blocks[EMPTY];
+                int cur = r+1;
+                while (cur+1 < h and s.field[idx(cur+1, c)] == blocks[EMPTY]) cur++;
+                s.field[idx(cur, c)] = tmp;
+            }
+        }
+    }
+}
+
+// 今の状態から次のターンの状態を返す
+// State simulator(Staet& now, Pack& p, int& r) {
+//
+//
+//
+// }
 
 class Solver
 {
@@ -107,43 +159,12 @@ void Solver::run()
 // メインロジック
 void Solver::think()
 {
+
     cout << "2 0" << endl;
 }
 
 int main()
 {
-    Solver solver;
-    solver.run();
-    //
-    // while (true)
-    // {
-    //     int turn;
-    //     cin >> turn;
-    //     cin.ignore();
-    //     double tm;
-    //     cin >> tm;
-    //     cin.ignore();
-    //     int a, b;
-    //     cin >> a >> b;
-    //     cin.ignore();
-    //     rep(r, 10) rep(c, 16) {
-    //         int t;
-    //         cin >> t;
-    //         cin.ignore();
-    //     }
-    //     string tmp;
-    //     cin >> tmp;
-    //     cin.ignore();
-    //
-    //     int ta, tb, tc;
-    //     cin >> ta >> tb >> tc;
-    //     cin.ignore();
-    //     rep(r, 10) rep(c, 16) {
-    //         int t;
-    //         cin >> t;
-    //         cin.ignore();
-    //     }
-    //     cin >> tmp;
-    //     cout << "3 0" << endl;
-    // }
+    // Solver solver;
+    // solver.run();
 }
