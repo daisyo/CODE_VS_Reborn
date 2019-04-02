@@ -21,10 +21,15 @@ const int FIELD_LENGTH = 16;
 const int FIELD_WIDTH = 10;
 
 const int EMPTY = 0;
+const int VANISH = 10;
 const int OJAMA = 11;
 const char blocks[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'X', 'B' };
 
 inline int idx(int r, int c) { return r * FIELD_WIDTH + c; }
+inline char set_block(int b)
+{
+    return blocks[b];
+}
 
 // パック
 struct Pack
@@ -52,13 +57,18 @@ struct Player
     int ojama_num;
     char skill;
 
-    char field[FIELD_LENGTH][FIELD_WIDTH];
+    char field[FIELD_LENGTH*FIELD_WIDTH];
 
     Player() {}
-    void input()
+    inline void input()
     {
         cin >> think_time >> ojama_num >> skill;
-        for (int r = 0; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c) cin >> field[r][c];
+        int tmpb;
+        for (int r = 0; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c)
+        {
+            cin >> tmpb;
+            field[idx(r, c)] = set_block(tmpb);
+        }
         string tmp; cin >> tmp;
     }
 };
@@ -103,6 +113,52 @@ inline void fall(State& s, int h=FIELD_LENGTH, int w=FIELD_WIDTH)
             }
         }
     }
+}
+
+inline bool vanish_ok(char s1, char s2)
+{
+    return (s1-'0') + (s2-'0') == VANISH;
+}
+
+// 消す処理（愚直）
+inline bool vanish(State& s, int h=FIELD_LENGTH, int w=FIELD_WIDTH)
+{
+    bool update = false;
+    bitset<FIELD_LENGTH*FIELD_WIDTH> vanishflag;
+    int dc[] = { 1, 0, -1, 0, 1, 1, -1, -1 };
+    int dr[] = { 0, 1, 0, -1, 1, -1, 1, -1 };
+
+    auto ok = [&](int r, int c) {
+        return 0 <= r and r < h and 0 <= c and c < w;
+    };
+
+    // 何が消えるのか見る
+    for (int r = 0; r < h; ++r)
+    {
+        for (int c = 0; c < w; ++c)
+        {
+            for (int d = 0; d < 8; ++d)
+            {
+                int nr = r + dr[d], nc = c + dc[d];
+                if (ok(nr, nc) and vanish_ok(s.field[idx(r, c)], s.field[idx(nr, nc)]))
+                {
+                    update = true;
+                    vanishflag[idx(r, c)] = vanishflag[idx(nr, nc)] = true;
+                }
+            }
+        }
+    }
+
+    // 消す
+    for (int r = 0; r < h; ++r)
+    {
+        for (int c = 0; c < w; ++c)
+        {
+            if (vanishflag[idx(r, c)]) s.field[idx(r, c)] = blocks[EMPTY];
+        }
+    }
+
+    return update;
 }
 
 // 今の状態から次のターンの状態を返す
@@ -165,6 +221,43 @@ void Solver::think()
 
 int main()
 {
+
+    // State state;
+    // int h, w;
+    // cin >> h >> w;
+    // for (int r = 0; r < h; ++r) for (int c = 0; c < w; ++c) {
+    //     cin >> state.field[idx(r, c)];
+    // }
+    //
+    // for (int r = 0; r < h; ++r) for (int c = 0; c < w; ++c) {
+    //     cout << state.field[idx(r, c)] << " \n"[c==w-1];
+    // }
+    //
+    // cout << endl;
+    //
+    // while (true) {
+    //     bool ok = false;
+    //
+    //     ok = vanish(state, h, w);
+    //     for (int r = 0; r < h; ++r) for (int c = 0; c < w; ++c) {
+    //         cout << state.field[idx(r, c)] << " \n"[c==w-1];
+    //     }
+    //     cout << endl;
+    //
+    //     fall(state, h, w);
+    //     for (int r = 0; r < h; ++r) for (int c = 0; c < w; ++c) {
+    //         cout << state.field[idx(r, c)] << " \n"[c==w-1];
+    //     }
+    //     cout << endl;
+    //
+    //     if (!ok) break;
+    // }
+
+    // for (int r = 0; r < h; ++r) for (int c = 0; c < w; ++c) {
+    //     cout << state.field[idx(r, c)] << " \n"[c==w-1];
+    // }
+
+
     // Solver solver;
     // solver.run();
 }
