@@ -12,7 +12,7 @@ template<class T> void vin(vector<T>& v, int n) {
     }
 }
 
-#define LIMIT_SEC 180;
+#define LIMIT_SEC 180
 
 // SEC
 class Timer {
@@ -69,7 +69,8 @@ const string myname = "daisyo"; // 名前
 
 const int MAX_TURN = 500;
 const int PACK_SIZE = 2;
-const int FIELD_LENGTH = 16;
+const int LENGTH_OFFSET = 2;
+const int FIELD_LENGTH = 16 + LENGTH_OFFSET;
 const int FIELD_WIDTH = 10;
 
 const int EMPTY = 0;
@@ -101,27 +102,57 @@ struct Pack
         for (int r = 0; r < PACK_SIZE; ++r) for (int c = 0; c < PACK_SIZE; ++c) cin >> pack[r][c];
         string tmp; cin >> tmp;
     }
+
+    // 愚直
+    void rotate(int r=1) {
+
+        int tmp[PACK_SIZE][PACK_SIZE];
+        for (int i = 0; i < r; ++i) {
+            for (int a1=0; a1<PACK_SIZE; ++a1) for (int a2=0; a2<PACK_SIZE; ++a2) {
+                tmp[a1][a2] = pack[PACK_SIZE - 1 - a2][a1];
+            }
+            for (int a1=0; a1<PACK_SIZE; ++a1) for (int a2=0; a2<PACK_SIZE; ++a2) {
+                pack[a1][a2] = tmp[a1][a2];
+            }
+        }
+
+        for (int a1=0; a1<PACK_SIZE; ++a1) for (int a2=0; a2<PACK_SIZE; ++a2) {
+            pack[a1][a2] = tmp[a1][a2];
+        }
+    }
 };
 
 struct Player
 {
     int think_time;
     int ojama_num;
-    char skill;
+    int skill;
 
     char field[FIELD_LENGTH*FIELD_WIDTH];
 
-    Player() {}
+    Player() {
+        for (int r = 0; r < FIELD_LENGTH; ++r)
+        {
+            for (int c = 0; c < FIELD_WIDTH; ++c)
+            {
+                field[idx(r, c)] = blocks[EMPTY];
+            }
+        }
+    }
     inline void input()
     {
         cin >> think_time >> ojama_num >> skill;
+        cin.ignore();
+        cerr << think_time << ", " << ojama_num << ", " << skill << endl;
         int tmpb;
-        for (int r = 0; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c)
+        for (int r = LENGTH_OFFSET; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c)
         {
             cin >> tmpb;
             field[idx(r, c)] = set_block(tmpb);
         }
+        cin.ignore();
         string tmp; cin >> tmp;
+        cin.ignore();
     }
 };
 
@@ -134,13 +165,41 @@ struct State
     int score;
     char field[FIELD_LENGTH * FIELD_WIDTH];
     shared_ptr<State> parent;
+    string command;
 
-    State() : depth(0), score(0) {}
+    State() : depth(0), score(0), parent(nullptr), command("") {}
     State(shared_ptr<State> p) {
         depth = p->depth + 1;
         score = p->score;
         for (int r = 0; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c) field[idx(r, c)] = p->field[idx(r, c)];
         parent = p;
+        command = "";
+    }
+
+    // 置いてみる
+    // だめだったらfalseを返す
+    bool set(Pack& p, int x) {
+        for (int c=x; c<x+PACK_SIZE; ++c) {
+            for (int r=0; r<PACK_SIZE; ++r) {
+                if (field[idx(r, c)] != blocks[EMPTY]) return false;
+                field[idx(r, c)] = p.pack[r][c-x];
+            }
+        }
+        return true;
+    }
+
+    // だめだったらtrue
+    bool is_over() {
+        for (int c = 0; c < FIELD_WIDTH; ++c) {
+            for (int r = LENGTH_OFFSET-1; r >= 0; --r) {
+                if (field[idx(r, c)] != blocks[EMPTY]) return true;
+            }
+        }
+        return false;
+    }
+
+    bool operator<(const State& s) const {
+        return score < s.score;
     }
 };
 
@@ -212,11 +271,71 @@ inline bool vanish(State& s, int h=FIELD_LENGTH, int w=FIELD_WIDTH)
     return update;
 }
 
+int calc_score(State s) {
+    int field[FIELD_LENGTH*FIELD_WIDTH];
+    int max_chain = 0;
+
+    for (int r = 0; r < FIELD_LENGTH; ++r)
+    {
+        for (int c = 0; c < FIELD_WIDTH; ++c)
+        {
+            field[idx(r, c)] = s.field[idx(r, c)];
+        }
+    }
+
+    // copy
+    auto copy = [&]() {
+        for (int r = 0; r < FIELD_LENGTH; ++r) {
+            for (int c = 0; c < FIELD_WIDTH; ++c) {
+                s.field[idx(r, c)] = field[idx(r, c)];
+            }
+        }
+    };
+
+    int dr[] = { 1, 0, -1, 0, 1, 1, -1, -1 };
+    int dc[] = { 0, 1, 0, -1, 1, -1, 1, -1 };
+
+    auto ok = [&](int r, int c) {
+        return 0 <= r and r < FIELD_LENGTH and 0 <= c and c < FIELD_WIDTH;
+    };
+
+    for (int r = 0; r < FIELD_LENGTH; ++r) {
+        for (int c = 0; c < FIELD_WIDTH; ++c) {
+            for (int d = 0; d < 8; ++d) {
+                int nr = r + dr[d], nc = c + dc[d];
+
+                // 一個消してみる
+                if (ok(nr, nc) and field[idx(nr, nc)] == blocks[EMPTY] and field[idx(r, c)] != blocks[EMPTY] and field[idx(r, c)] != blocks[OJAMA]) {
+
+                    copy();
+                    s.field[idx(r, c)] = blocks[EMPTY];
+
+                    bool update = true;
+                    fall(s);
+                    int chain = 1;
+                    while (update)
+                    {
+                        update = vanish(s);
+                        if (update) {
+                            chain++;
+                            fall(s);
+                        }
+                    }
+
+                    max_chain = max(max_chain, chain);
+                }
+            }
+        }
+    }
+
+    return max_chain;
+}
 
 class Solver
 {
 private:
     int turn;
+    Timer timer;
 public:
     void initialize();
     void run();
@@ -240,6 +359,8 @@ void Solver::initialize()
 void Solver::loopinput()
 {
     cin >> turn;        // 現在のターン(0-index)
+    cin.ignore();
+    cerr << "turn: " << turn << endl;
     players[0].input();
     players[1].input();
 }
@@ -264,50 +385,110 @@ void Solver::think()
     // 最初の状態をコピー
     State firstState;
     for (int r = 0; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c) firstState.field[idx(r, c)] = players[0].field[idx(r, c)];
+    //
+    int maxturn = 10;
+    priority_queue<State> hstate[maxturn + 1];
+    hstate[0].push(firstState);
+    //
+    const double diff = (double)(LIMIT_SEC - timer.get_time()) / (MAX_TURN - turn);
+    const double limit = timer.get_time() + diff;
+    const int chokudai_width = 1;
 
+    if (turn + 10 >= 500) {
+        maxturn = MAX_TURN - turn;
+    }
 
-    cout << "2 0" << endl;
+    double current_time = timer.get_time();
+
+    string fireCommand = "";
+    int maxchain = 0;
+
+    while ((current_time = timer.get_time()) < limit) {
+        for (int t = 0; t < maxturn; ++t)
+        {
+            for (int i = 0; i < chokudai_width; ++i)
+            {
+                if (hstate[t].empty()) break;
+
+                State now = hstate[t].top(); hstate[t].pop();
+
+                for (int x = 0; x <= FIELD_WIDTH-PACK_SIZE; ++x) for (int r = 0; r < 4; ++r) {
+
+                    Pack pack = packs[turn + t]; pack.rotate(r);
+                    State next(make_shared<State>(now));
+
+                    bool ok = next.set(pack, x);
+                    if (!ok) continue;
+
+                    fall(next);
+                    if (next.is_over()) {
+                        continue;
+                    }
+
+                    // 落とせた
+                    bool update = true;
+                    int chain = 0;
+                    while (update)
+                    {
+                        update = vanish(next);
+                        if (update) {
+                            fall(next);
+                            chain++;
+                        }
+                    }
+
+                    if (t == 0 and maxchain < chain) {
+                        maxchain = chain;
+                        fireCommand = to_string(x) + " " + to_string(r);
+                    }
+
+                    //
+                    next.score += calc_score(next);
+                    next.command = to_string(x) + " " + to_string(r);
+                    hstate[t + 1].push(next);
+                }
+            }
+        }
+    }
+
+    if (maxchain >= 5) {
+        cout << fireCommand << endl;
+        cout.flush();
+        return;
+    }
+    if (players[0].skill >= 80) {
+        cout << "S" << endl;
+        cout.flush();
+        return;
+    }
+
+    cerr << "max chain: " << maxchain << endl;
+
+    if (hstate[maxturn].empty()) {
+        cout << "2 0" << endl;
+        cout.flush();
+        return;
+    }
+
+    State bestState = hstate[maxturn].top();
+    while (bestState.parent != nullptr and bestState.depth > 1) {
+        bestState = *bestState.parent;
+    }
+
+    //エラー用
+    if (bestState.command == "") {
+        cout << "2 0" << endl;
+        cout.flush();
+        return;
+    }
+
+    cout << bestState.command << endl;
+    cout.flush();
 }
 
 int main()
 {
 
-    // State state;
-    // int h, w;
-    // cin >> h >> w;
-    // for (int r = 0; r < h; ++r) for (int c = 0; c < w; ++c) {
-    //     cin >> state.field[idx(r, c)];
-    // }
-    //
-    // for (int r = 0; r < h; ++r) for (int c = 0; c < w; ++c) {
-    //     cout << state.field[idx(r, c)] << " \n"[c==w-1];
-    // }
-    //
-    // cout << endl;
-    //
-    // while (true) {
-    //     bool ok = false;
-    //
-    //     ok = vanish(state, h, w);
-    //     for (int r = 0; r < h; ++r) for (int c = 0; c < w; ++c) {
-    //         cout << state.field[idx(r, c)] << " \n"[c==w-1];
-    //     }
-    //     cout << endl;
-    //
-    //     fall(state, h, w);
-    //     for (int r = 0; r < h; ++r) for (int c = 0; c < w; ++c) {
-    //         cout << state.field[idx(r, c)] << " \n"[c==w-1];
-    //     }
-    //     cout << endl;
-    //
-    //     if (!ok) break;
-    // }
-
-    // for (int r = 0; r < h; ++r) for (int c = 0; c < w; ++c) {
-    //     cout << state.field[idx(r, c)] << " \n"[c==w-1];
-    // }
-
-
-    // Solver solver;
-    // solver.run();
+    Solver solver;
+    solver.run();
 }
