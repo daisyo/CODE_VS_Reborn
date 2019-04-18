@@ -1,18 +1,19 @@
 #include <bits/stdc++.h>
+
 using namespace std;
 #define rep(i,n) for (int (i)=(0);(i)<(int)(n);++(i))
 using ll = long long;
 using P = pair<ll, ll>;
 using namespace std;
 
-template<class T> void vin(vector<T>& v, int n) {
-    v.resize(n);
-    for (int i = 0; i < n; ++i) {
-        cin >> v[i];
-    }
-}
+//#define LOCAL
 
 #define LIMIT_SEC 180
+
+#ifdef LOCAL
+ofstream fout("/Users/k16039kk/git/CODE_VS_Rebon/out.txt");
+#endif
+
 
 // SEC
 class Timer {
@@ -42,6 +43,7 @@ public:
         return limit;
     }
 };
+
 
 
 class XorShift {
@@ -84,6 +86,20 @@ inline char set_block(int b)
     return blocks[b];
 }
 
+inline int get_ojama(double d) {
+    return d / 2;
+}
+
+inline int get_chain_score(int sc) {
+    int ret = 0;
+    double d = 1.3;
+    rep(i, sc) {
+        ret += floor(d);
+        d *= d;
+    }
+    return ret;
+}
+
 // パック
 struct Pack
 {
@@ -105,8 +121,8 @@ struct Pack
 
     // 愚直
     void rotate(int r=1) {
-
-        int tmp[PACK_SIZE][PACK_SIZE];
+        if (r == 0) return;
+        char tmp[PACK_SIZE][PACK_SIZE];
         for (int i = 0; i < r; ++i) {
             for (int a1=0; a1<PACK_SIZE; ++a1) for (int a2=0; a2<PACK_SIZE; ++a2) {
                 tmp[a1][a2] = pack[PACK_SIZE - 1 - a2][a1];
@@ -127,6 +143,7 @@ struct Player
     int think_time;
     int ojama_num;
     int skill;
+    int score;
 
     char field[FIELD_LENGTH*FIELD_WIDTH];
 
@@ -141,9 +158,8 @@ struct Player
     }
     inline void input()
     {
-        cin >> think_time >> ojama_num >> skill;
+        cin >> think_time >> ojama_num >> skill >> score;
         cin.ignore();
-        cerr << think_time << ", " << ojama_num << ", " << skill << endl;
         int tmpb;
         for (int r = LENGTH_OFFSET; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c)
         {
@@ -161,19 +177,24 @@ Player players[2];
 
 struct State
 {
-    char depth;
-    int score;
+    int depth;
+    double score;
     char field[FIELD_LENGTH * FIELD_WIDTH];
     shared_ptr<State> parent;
     string command;
 
-    State() : depth(0), score(0), parent(nullptr), command("") {}
+    int rensa;
+    int real_score;
+
+    State() : depth(0), score(0), parent(nullptr), command(""), rensa(0), real_score(0) {}
     State(shared_ptr<State> p) {
         depth = p->depth + 1;
         score = p->score;
         for (int r = 0; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c) field[idx(r, c)] = p->field[idx(r, c)];
         parent = p;
         command = "";
+        rensa = p->rensa;
+        real_score = p->real_score;
     }
 
     // 置いてみる
@@ -301,14 +322,29 @@ int calc_score(State s) {
 
     for (int r = 0; r < FIELD_LENGTH; ++r) {
         for (int c = 0; c < FIELD_WIDTH; ++c) {
+
+            if (field[idx(r, c)] != blocks[EMPTY] and field[idx(r, c)] != blocks[OJAMA])
             for (int d = 0; d < 8; ++d) {
                 int nr = r + dr[d], nc = c + dc[d];
+                int nnr = nr + 1, nnc = nc;
 
                 // 一個消してみる
+                // 8近傍に空のセルがあって，そのマスはお邪魔ではないブロックがある
                 if (ok(nr, nc) and field[idx(nr, nc)] == blocks[EMPTY] and field[idx(r, c)] != blocks[EMPTY] and field[idx(r, c)] != blocks[OJAMA]) {
+
+                    if (!ok(nnr, nnc)) {}
+                    else if (field[idx(nnr, nnc)] == blocks[EMPTY]) {
+                        continue;
+                    }
 
                     copy();
                     s.field[idx(r, c)] = blocks[EMPTY];
+
+                    // fout << "(" << r << ", " << c << ")" << endl;
+                    // rep(r, FIELD_LENGTH) rep(c, FIELD_WIDTH) {
+                    //     fout << s.field[idx(r,c)] << " \n"[c == FIELD_WIDTH-1];
+                    // }
+                    // fout << "___" << endl;
 
                     bool update = true;
                     fall(s);
@@ -322,6 +358,11 @@ int calc_score(State s) {
                         }
                     }
 
+                    // rep(r, FIELD_LENGTH) rep(c, FIELD_WIDTH) {
+                    //     fout << s.field[idx(r,c)] << " \n"[c == FIELD_WIDTH-1];
+                    // }
+                    // fout << endl;
+
                     max_chain = max(max_chain, chain);
                 }
             }
@@ -334,8 +375,10 @@ int calc_score(State s) {
 class Solver
 {
 private:
+    int cur;
     int turn;
     Timer timer;
+    vector<string> bestFirst;
 public:
     void initialize();
     void run();
@@ -345,22 +388,24 @@ public:
 
 void Solver::initialize()
 {
-    cin.tie(0);
-    ios_base::sync_with_stdio(false);
+    // cin.tie(0);
+    // ios_base::sync_with_stdio(false);
 
     cout << myname << endl;
+    cout.flush();
 
     for (int turn = 0; turn < MAX_TURN; ++turn)
     {
         packs[turn].input();
     }
+    cur = 0;
 }
 
 void Solver::loopinput()
 {
     cin >> turn;        // 現在のターン(0-index)
     cin.ignore();
-    cerr << "turn: " << turn << endl;
+    //cerr << "turn: " << turn << endl;
     players[0].input();
     players[1].input();
 }
@@ -382,19 +427,52 @@ void Solver::run()
 void Solver::think()
 {
 
+    if (cur < bestFirst.size() and players[0].ojama_num < FIELD_WIDTH) {
+        cout << bestFirst[cur++] << endl;
+        cout.flush();
+        //swap(bestFirst[0], bestFirst[bestFirst.size()-1]);
+        //bestFirst.pop_back();
+        return;
+    }
+    // else if (turn != 0) {
+    //     cout << "10 10" << endl;
+    //     return;
+    // }
+
     // 最初の状態をコピー
     State firstState;
     for (int r = 0; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c) firstState.field[idx(r, c)] = players[0].field[idx(r, c)];
+
+    if (players[0].ojama_num >= FIELD_WIDTH) {
+        for (int x=0; x<FIELD_WIDTH; ++x) {
+            firstState.field[idx(0, x)] = blocks[OJAMA];
+        }
+    }
+
+    // #ifdef LOCAL
+    // fout << "prev:" << endl;
+    // rep(r, FIELD_LENGTH) rep(c, FIELD_WIDTH) fout << firstState.field[idx(r, c)] << " \n"[c == FIELD_WIDTH-1];
+    // fout << endl;
+    // #endif
+
+    fall(firstState);
+
     //
-    int maxturn = 10;
+    int maxturn = 17;
     priority_queue<State> hstate[maxturn + 1];
     hstate[0].push(firstState);
+
     //
-    const double diff = (double)(LIMIT_SEC - timer.get_time()) / (MAX_TURN - turn);
+    double diff = 10;//(double)(LIMIT_SEC - timer.get_time()) / (MAX_TURN - turn);
+    if (turn != 0) {
+        diff = 1;//(double)(LIMIT_SEC - timer.get_time()) / (MAX_TURN - turn);;
+        maxturn = 13;
+    }
     const double limit = timer.get_time() + diff;
     const int chokudai_width = 1;
 
-    if (turn + 10 >= 500) {
+
+    if (turn + maxturn >= 500) {
         maxturn = MAX_TURN - turn;
     }
 
@@ -442,22 +520,79 @@ void Solver::think()
                         fireCommand = to_string(x) + " " + to_string(r);
                     }
 
-                    //
-                    next.score += calc_score(next);
+                    int tmp = 0;
+                    for (int c = 0; c < FIELD_WIDTH; ++c) {
+                        for (int r = 0; r < FIELD_LENGTH; ++r) {
+                            if (next.field[idx(r, c)] != blocks[EMPTY]) {
+                                tmp += pow(FIELD_LENGTH-r, 2);
+                                break;
+                            }
+                        }
+                    }
+                    int tmp2 = 0;
+                    for (int c = 0; c < FIELD_WIDTH; ++c) {
+                        for (int r = 0; r < FIELD_LENGTH; ++r) {
+                            if (next.field[idx(r, c)] != blocks[EMPTY] and next.field[idx(r, c)] != blocks[OJAMA]) {
+                                tmp2++;
+                            }
+                        }
+                    }
+                    int tmp3 = 0;
+                    for (int c = 0; c < FIELD_WIDTH; ++c) {
+                        for (int r = 0; r < FIELD_LENGTH; ++r) {
+                            if (now.field[idx(r, c)] != blocks[EMPTY] and now.field[idx(r, c)] != blocks[OJAMA]) {
+                                tmp3++;
+                            }
+                        }
+                    }
+
+                    int tmp5 = 0;
+                    bitset<FIELD_LENGTH*FIELD_WIDTH+1> cnt;
+                    rep(r, FIELD_LENGTH) rep(c, FIELD_WIDTH) {
+                        if (next.field[idx(r, c)] == blocks[5]) {
+                            tmp5++;
+
+                            int dr[] = { 1, 0, -1, 0, 1, 1, -1, -1};
+                            int dc[] = { 0, 1, 0, -1, -1, 1, 1, -1};
+                            rep(d, 8) {
+                                int nr = r + dr[d], nc = c + dc[d];
+                                if (0 <= nr and nr < FIELD_LENGTH and 0 <= nc and nc < FIELD_WIDTH) {
+                                    if (next.field[idx(nr, nc)] != blocks[OJAMA] and next.field[idx(nr, nc)] != blocks[EMPTY]) {
+                                        cnt[idx(nr, nc)] = 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    int nc = calc_score(next);
+                    next.rensa = max({next.rensa, chain});
+
+                    if (chain >= 10) next.score += chain*100000;
+                    else next.score += 1000 * nc - tmp*10 - chain * 10 + tmp2 * 50;
+                    next.real_score += get_chain_score(chain);
                     next.command = to_string(x) + " " + to_string(r);
+
                     hstate[t + 1].push(next);
                 }
             }
         }
     }
 
-    if (maxchain >= 5) {
-        cout << fireCommand << endl;
-        cout.flush();
-        return;
-    }
     if (players[0].skill >= 80) {
-        cout << "S" << endl;
+        int num = 0;
+        for (int r = 0; r < FIELD_LENGTH; ++r) for (int c = 0; c < FIELD_WIDTH; ++c) {
+            if (players[0].field[idx(r, c)] == '5') num++;
+        }
+        if (num >= 1) {
+            cout << "S" << endl;
+            cout.flush();
+            return;
+        }
+    }
+
+    if (maxchain >= 10) {
+        cout << fireCommand << endl;
         cout.flush();
         return;
     }
@@ -465,18 +600,51 @@ void Solver::think()
     cerr << "max chain: " << maxchain << endl;
 
     if (hstate[maxturn].empty()) {
+        cerr << "DAME" << endl;
         cout << "2 0" << endl;
         cout.flush();
         return;
     }
-
+    //
     State bestState = hstate[maxturn].top();
-    while (bestState.parent != nullptr and bestState.depth > 1) {
+    cerr << "depth: " <<  bestState.depth << endl;
+    cerr << bestState.score << endl;
+    cerr << "best rensa: " << bestState.rensa << endl;
+
+    // rep(r, FIELD_LENGTH) rep(c, FIELD_WIDTH) {
+    //     fout << bestState.field[idx(r, c)] << " \n"[c == FIELD_WIDTH-1];
+    // }
+    // fout << endl;
+
+
+    // if (turn == 0) {
+    //     cerr << "Real Score = " << bestState.real_score << endl;
+    // }
+
+    // 0と1の両方の可能性があります
+    // bestFirstを使うときは0です
+    while (bestState.parent != nullptr and ( (turn == 0 and bestState.depth > 0) or (turn != 0 and bestState.depth > 1))) {
+        if (turn == 0) bestFirst.push_back(bestState.command);
         bestState = *bestState.parent;
+    }
+
+    if (bestFirst.size() and turn == 0) {
+        if (turn == 0) reverse(bestFirst.begin(), bestFirst.end());
+        cerr << "num = " << bestFirst.size() << endl;
+        cout << bestFirst[cur++] << endl;
+        cout.flush();
+        //swap(bestFirst[0], bestFirst[bestFirst.size()-1]);
+        //bestFirst.pop_back();
+
+        //fout << "max chain " << bestState.rensa << endl;
+
+
+        return;
     }
 
     //エラー用
     if (bestState.command == "") {
+        //cerr << "DAME" << endl;
         cout << "2 0" << endl;
         cout.flush();
         return;
@@ -488,7 +656,27 @@ void Solver::think()
 
 int main()
 {
-
     Solver solver;
     solver.run();
 }
+
+// // debug用
+// int main() {
+//     auto sc = [](int sc) {
+//         ll ret = 0;
+//         double tmp = 1.3;
+//         rep(i, sc) {
+//             ret += floor(tmp);
+//             tmp *= 1.3;
+//         }
+//         return ret;
+//     };
+//
+//     auto tmp = [](ll b) {
+//         return floor(25LL * 1.0 * powl(2, b*1.0/12.0));
+//     };
+//
+//     for (int i=0; i<100; ++i) {
+//         cout << i << "blocks: " << (ll)floor(tmp(i)*1.0/2.0) << endl;
+//     }
+// }
